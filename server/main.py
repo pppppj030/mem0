@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 load_dotenv()
 
 
-POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "postgres")
+POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
 POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "5432")
 POSTGRES_DB = os.environ.get("POSTGRES_DB", "postgres")
 POSTGRES_USER = os.environ.get("POSTGRES_USER", "postgres")
@@ -47,10 +47,11 @@ DEFAULT_CONFIG = {
             "collection_name": POSTGRES_COLLECTION_NAME,
         },
     },
-    "graph_store": {
-        "provider": "neo4j",
-        "config": {"url": NEO4J_URI, "username": NEO4J_USERNAME, "password": NEO4J_PASSWORD},
-    },
+    # Disable graph store by default (enable by providing non-empty config via /configure)
+    # "graph_store": {
+    #     "provider": "neo4j",
+    #     "config": {"url": NEO4J_URI, "username": NEO4J_USERNAME, "password": NEO4J_PASSWORD},
+    # },
     "llm": {
         "provider": "openai",
         "config": {
