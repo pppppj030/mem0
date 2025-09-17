@@ -103,6 +103,11 @@ class SearchRequest(BaseModel):
     filters: Optional[Dict[str, Any]] = None
 
 
+class UpdateMemoryRequest(BaseModel):
+    text: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
 @app.post("/configure", summary="Configure Mem0")
 def set_config(config: Dict[str, Any]):
     """Set memory configuration."""
@@ -167,18 +172,44 @@ def search_memories(search_req: SearchRequest):
 
 
 @app.put("/memories/{memory_id}", summary="Update a memory")
-def update_memory(memory_id: str, updated_memory: Dict[str, Any]):
-    """Update an existing memory with new content.
-    
+def update_memory(memory_id: str, updated_memory: UpdateMemoryRequest):
+    """Update an existing memory's text and/or metadata.
+
     Args:
         memory_id (str): ID of the memory to update
-        updated_memory (str): New content to update the memory with
-        
+        updated_memory (UpdateMemoryRequest): Payload with optional text and metadata
+
     Returns:
         dict: Success message indicating the memory was updated
     """
     try:
-        return MEMORY_INSTANCE.update(memory_id=memory_id, data=updated_memory)
+        if updated_memory.text is None and updated_memory.metadata is None:
+            raise HTTPException(status_code=400, detail="Either 'text' or 'metadata' must be provided.")
+
+        # If only text needs to be updated, use the public API
+        if updated_memory.metadata is None:
+            return MEMORY_INSTANCE.update(memory_id=memory_id, data=updated_memory.text)  # type: ignore[arg-type]
+
+        # If metadata is provided (with or without text), use internal update to pass metadata through
+        # Determine the text to embed: provided text or current memory content
+        new_text: Optional[str] = updated_memory.text
+        if new_text is None:
+            existing = MEMORY_INSTANCE.get(memory_id)
+            if not existing or not isinstance(existing, dict) or existing.get("memory") is None:
+                raise HTTPException(status_code=404, detail="Memory not found")
+            new_text = existing["memory"]
+
+        embeddings = MEMORY_INSTANCE.embedding_model.embed(new_text, "update")
+        existing_embeddings = {new_text: embeddings}
+        MEMORY_INSTANCE._update_memory(  # type: ignore[attr-defined]
+            memory_id=memory_id,
+            data=new_text,
+            existing_embeddings=existing_embeddings,
+            metadata=updated_memory.metadata,
+        )
+        return {"message": "Memory updated successfully!"}
+    except HTTPException:
+        raise
     except Exception as e:
         logging.exception("Error in update_memory:")
         raise HTTPException(status_code=500, detail=str(e))
