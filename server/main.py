@@ -144,7 +144,29 @@ def get_all_memories(
         params = {
             k: v for k, v in {"user_id": user_id, "run_id": run_id, "agent_id": agent_id}.items() if v is not None
         }
-        return MEMORY_INSTANCE.get_all(**params)
+        raw_response = MEMORY_INSTANCE.get_all(**params)
+
+        # Normalize and filter to only id and memory
+        if isinstance(raw_response, dict):
+            items = raw_response.get("results")
+            if isinstance(items, list):
+                filtered = [
+                    {"id": item.get("id"), "memory": item.get("memory")}
+                    for item in items
+                    if isinstance(item, dict)
+                ]
+                return {"results": filtered}
+            return {"results": []}
+
+        if isinstance(raw_response, list):
+            filtered = [
+                {"id": item.get("id"), "memory": item.get("memory")}
+                for item in raw_response
+                if isinstance(item, dict)
+            ]
+            return {"results": filtered}
+
+        return raw_response
     except Exception as e:
         logging.exception("Error in get_all_memories:")
         raise HTTPException(status_code=500, detail=str(e))
@@ -154,7 +176,12 @@ def get_all_memories(
 def get_memory(memory_id: str):
     """Retrieve a specific memory by ID."""
     try:
-        return MEMORY_INSTANCE.get(memory_id)
+        raw_item = MEMORY_INSTANCE.get(memory_id)
+
+        if isinstance(raw_item, dict):
+            return {"id": raw_item.get("id"), "memory": raw_item.get("memory")}
+        # If not dict (e.g., None), return as-is
+        return raw_item
     except Exception as e:
         logging.exception("Error in get_memory:")
         raise HTTPException(status_code=500, detail=str(e))
@@ -165,7 +192,31 @@ def search_memories(search_req: SearchRequest):
     """Search for memories based on a query."""
     try:
         params = {k: v for k, v in search_req.model_dump().items() if v is not None and k != "query"}
-        return MEMORY_INSTANCE.search(query=search_req.query, **params)
+        raw_response = MEMORY_INSTANCE.search(query=search_req.query, **params)
+
+        # Normalize and filter to only id and memory
+        if isinstance(raw_response, dict):
+            items = raw_response.get("results")
+            if isinstance(items, list):
+                filtered = [
+                    {"id": item.get("id"), "memory": item.get("memory")}
+                    for item in items
+                    if isinstance(item, dict)
+                ]
+                return {"results": filtered}
+            # If structure is unexpected, return empty results to avoid leaking extra fields
+            return {"results": []}
+
+        if isinstance(raw_response, list):
+            filtered = [
+                {"id": item.get("id"), "memory": item.get("memory")}
+                for item in raw_response
+                if isinstance(item, dict)
+            ]
+            return {"results": filtered}
+
+        # Fallback: return as-is (unlikely), but keeps compatibility
+        return raw_response
     except Exception as e:
         logging.exception("Error in search_memories:")
         raise HTTPException(status_code=500, detail=str(e))
